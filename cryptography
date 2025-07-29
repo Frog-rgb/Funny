@@ -1,0 +1,123 @@
+import os
+import base64
+import hashlib
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA256, SHA512, MD5
+from Crypto.Util.Padding import pad, unpad
+from Crypto.Random import get_random_bytes
+from Crypto import Random
+from binascii import hexlify, unhexlify
+
+class CryptoUtils:
+    # ========================
+    # SYMMETRIC ENCRYPTION (AES)
+    # ========================
+    @staticmethod
+    def aes_encrypt(data: str, key: bytes = None, mode=AES.MODE_CBC) -> dict:
+        """
+        Encrypts data using AES (CBC mode by default).
+        Returns: { 'iv': str, 'ciphertext': str, 'key': str }
+        """
+        if not key:
+            key = get_random_bytes(32)  # 256-bit key
+        
+        iv = get_random_bytes(16)
+        cipher = AES.new(key, mode, iv)
+        ciphertext = cipher.encrypt(pad(data.encode(), AES.block_size))
+        
+        return {
+            'iv': base64.b64encode(iv).decode(),
+            'ciphertext': base64.b64encode(ciphertext).decode(),
+            'key': base64.b64encode(key).decode()
+        }
+
+    @staticmethod
+    def aes_decrypt(iv: str, ciphertext: str, key: str, mode=AES.MODE_CBC) -> str:
+        """
+        Decrypts AES-encrypted data.
+        Returns: Decrypted plaintext.
+        """
+        iv = base64.b64decode(iv)
+        ciphertext = base64.b64decode(ciphertext)
+        key = base64.b64decode(key)
+        
+        cipher = AES.new(key, mode, iv)
+        plaintext = unpad(cipher.decrypt(ciphertext), AES.block_size)
+        return plaintext.decode()
+
+    # ========================
+    # ASYMMETRIC ENCRYPTION (RSA)
+    # ========================
+    @staticmethod
+    def generate_rsa_keypair(key_size=2048):
+        """Generates RSA public/private key pair."""
+        key = RSA.generate(key_size)
+        private_key = key.export_key()
+        public_key = key.publickey().export_key()
+        return {
+            'private_key': private_key.decode(),
+            'public_key': public_key.decode()
+        }
+
+    @staticmethod
+    def rsa_encrypt(data: str, public_key: str) -> str:
+        """Encrypts data using RSA public key."""
+        key = RSA.import_key(public_key)
+        cipher = PKCS1_OAEP.new(key, hashAlgo=SHA256)
+        ciphertext = cipher.encrypt(data.encode())
+        return base64.b64encode(ciphertext).decode()
+
+    @staticmethod
+    def rsa_decrypt(ciphertext: str, private_key: str) -> str:
+        """Decrypts RSA-encrypted data using private key."""
+        key = RSA.import_key(private_key)
+        cipher = PKCS1_OAEP.new(key, hashAlgo=SHA256)
+        plaintext = cipher.decrypt(base64.b64decode(ciphertext))
+        return plaintext.decode()
+
+    # ========================
+    # HASHING & PASSWORD CRACKING
+    # ========================
+    @staticmethod
+    def hash_data(data: str, algorithm='sha256') -> str:
+        """Hashes data using specified algorithm (md5, sha1, sha256, sha512)."""
+        hasher = hashlib.new(algorithm)
+        hasher.update(data.encode())
+        return hasher.hexdigest()
+
+    @staticmethod
+    def crack_hash(hash_str: str, wordlist_path: str, algorithm='sha256') -> str:
+        """
+        Attempts to crack a hash using a wordlist.
+        Returns: Plaintext password if found, else None.
+        """
+        if not os.path.exists(wordlist_path):
+            return None
+            
+        with open(wordlist_path, 'r', errors='ignore') as f:
+            for word in f:
+                word = word.strip()
+                hashed_word = CryptoUtils.hash_data(word, algorithm)
+                if hashed_word == hash_str:
+                    return word
+        return None
+
+    # ========================
+    # UTILITY FUNCTIONS
+    # ========================
+    @staticmethod
+    def generate_secure_password(length=16):
+        """Generates a cryptographically secure random password."""
+        chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()"
+        return ''.join(random.SystemRandom().choice(chars) for _ in range(length))
+
+    @staticmethod
+    def base64_encode(data: str) -> str:
+        """Base64 encodes data."""
+        return base64.b64encode(data.encode()).decode()
+
+    @staticmethod
+    def base64_decode(data: str) -> str:
+        """Base64 decodes data."""
+        return base64.b64decode(data).decode()
